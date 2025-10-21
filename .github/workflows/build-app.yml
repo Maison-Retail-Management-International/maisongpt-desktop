@@ -59,6 +59,58 @@ jobs:
       - name: Install pake-cli locally
         run: npm install pake-cli@latest
 
+      - name: Pin Tauri versions to 2.9.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e '\
+          const fs=require("fs"), path=require("path");\
+          function walk(dir){\
+            const out=[];\
+            for(const e of fs.readdirSync(dir,{withFileTypes:true})){\
+              const p=path.join(dir,e.name);\
+              if(e.isDirectory()) out.push(...walk(p)); else out.push(p);\
+            }\
+            return out;\
+          }\
+          const files=walk("node_modules/pake-cli");\
+          for(const f of files){\
+            if(f.endsWith("package.json")){\
+              try{\
+                const j=JSON.parse(fs.readFileSync(f,"utf8"));\
+                let changed=false;\
+                if(j.dependencies && j.dependencies["@tauri-apps/api"]){ j.dependencies["@tauri-apps/api"]="2.9.0"; changed=true; }\
+                if(j.devDependencies && j.devDependencies["@tauri-apps/api"]){ j.devDependencies["@tauri-apps/api"]="2.9.0"; changed=true; }\
+                if(changed){ fs.writeFileSync(f, JSON.stringify(j,null,2)); console.log("patched", f); }\
+              }catch(e){}\
+            }\
+            if(path.basename(f)==="Cargo.toml"){\
+              try{\
+                let s=fs.readFileSync(f,"utf8");\
+                s=s.replace(/(^\\s*tauri\\s*=\\s*\"[^\"]+\")/m, "tauri = \\\"2.9.0\\\" ");\
+                s=s.replace(/version\\s*=\\s*\"[^\"]+\"/g, "version = \\\"2.9.0\\\" ");\
+                fs.writeFileSync(f,s); console.log("patched", f);\
+              }catch(e){}\
+            }\
+          }'
+          # Ensure tauri CLI is available at 2.9.0
+          npm install @tauri-apps/cli@2.9.0
+
+      - name: Verify Tauri versions (2.9.x)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAURI_CRATE_VER=$(grep -Rhs --include='Cargo.toml' -E '(^\\s*tauri\\s*=\\s*\"|version\\s*=\\s*\")' node_modules/pake-cli | sed -n 's/.*\"\([0-9]\\+\.[0-9]\\+\.[0-9]\\+\)\".*/\1/p' | head -n1 || true)
+          NPM_API_VER=$(grep -Rhs --include='package.json' '\"@tauri-apps\\/api\"' node_modules/pake-cli | sed -n 's/.*\"@tauri-apps\\/api\"\\s*:\\s*\"\([0-9][^\" ]*\)\".*/\1/p' | head -n1 || true)
+          echo "Detected tauri crate: ${TAURI_CRATE_VER:-unknown}"
+          echo "Detected @tauri-apps/api: ${NPM_API_VER:-unknown}"
+          if [ -n "$TAURI_CRATE_VER" ] && [ -n "$NPM_API_VER" ]; then
+            if [ "${TAURI_CRATE_VER%.*}" != "2.9" ] || [ "${NPM_API_VER%.*}" != "2.9" ]; then
+              echo "Expected Tauri 2.9.x; got crate $TAURI_CRATE_VER, npm $NPM_API_VER"
+              exit 1
+            fi
+          fi
+
       - name: Initialize variables
         shell: bash
         env:
