@@ -1,10 +1,16 @@
-name: Build MaisonGPT Desktop (macOS & Windows)
+name: "Build MaisonGPT Desktop (macOS & Windows)"
 
 on:
+  # Trigger on version tag push (e.g., v1, v1.0 or v1.2.3)
+  push:
+    tags:
+      - 'v*'         # matches tags like v1, v2.0, v10.15.3 [oai_citation:4‡github.com](https://github.com/actions/create-release#:~:text=push%3A%20,i.e.%20v1.0%2C%20v20.15.10)
+      - 'v*.*.*'     # matches semantic version tags like v1.2.3
+  # Manual trigger with inputs
   workflow_dispatch:
     inputs:
       url:
-        description: "Target URL to package"
+        description: "Web app URL to package"
         required: true
         default: "https://chat.maisonrmi.com"
       name:
@@ -12,105 +18,81 @@ on:
         required: true
         default: "MaisonGPT"
       icon:
-        description: "Custom app icon (URL or repo path)"
+        description: "Path to app icon (PNG format)"
         required: false
         default: "assets/icons/logo-1024-white.png"
-      width:
-        description: "Window width"
-        required: false
-        default: "1200"
-      height:
-        description: "Window height"
-        required: false
-        default: "780"
-  push:
-    tags:
-      - 'v*'
-      - 'v*.*.*'
 
 jobs:
-  build:
-    name: Build (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            rust: stable
-          - os: windows-latest
-            rust: stable
-    runs-on: ${{ matrix.os }}
+  # Job to create a release (only runs on tag pushes)
+  release:
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}           # use the tag name for release [oai_citation:5‡github.com](https://github.com/actions/create-release#:~:text=with%3A%20tag_name%3A%20%24,body%3A)
+          release_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+    outputs:
+      # Expose the upload URL for use in other jobs
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
 
+  # Job to build app on both macOS and Windows
+  build:
+    needs: release   # ensure release job (if run) completes first
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]  # Matrix includes macOS and Windows runners [oai_citation:6‡github.com](https://github.com/actions/create-release#:~:text=push%3A%20,i.e.%20v1.0%2C%20v20.15.10)
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Set up Rust (stable)
+        uses: actions/setup-rust@v1
         with:
-          toolchain: ${{ matrix.rust }}
-          override: true
-          profile: minimal
+          rust-version: stable              # Install stable toolchain on runner
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          check-latest: true
+      - name: Install Pake CLI
+        run: npm install -g pake-cli        # Install Pake CLI globally [oai_citation:7‡gitee.com](https://gitee.com/grdnet/Pake#:~:text=with%20npm%20npm%20install%20,line%2C%20you%20can%20compile%20packages)
 
-      - name: Install pake-cli locally
-        run: npm install pake-cli@latest
+      - name: Build desktop app with Pake
+        # Use input values or defaults; ensure title bar is shown by not using --hide-title-bar
+        run: |
+          pake "${{ github.event.inputs.url || 'https://chat.maisonrmi.com' }}" \
+               --name "${{ github.event.inputs.name || 'MaisonGPT' }}" \
+               --icon "${{ github.event.inputs.icon || 'assets/icons/logo-1024-white.png' }}"
+        # The expressions above use '||' to fall back to default if input is empty [oai_citation:8‡dev.to](https://dev.to/mrmike/github-action-handling-input-default-value-5f2g#:~:text=runs,%27Octocat%27)
 
-      - name: Pin Tauri versions to 2.9.0
+      - name: Find output package
+        id: find_artifact
         shell: bash
         run: |
-          set -euo pipefail
-          # show the installed package to help debugging if it fails
-          ls -la node_modules/pake-cli || true
-          node .github/scripts/pin-tauri.js
-          # Ensure tauri CLI is available at 2.9.0
-          npm install @tauri-apps/cli@2.9.0
+          # Search for .dmg (Mac) or .msi (Windows) in the bundle output directory
+          artifact_path=$(find . -type f \( -name "*.dmg" -o -name "*_x64.msi" \) -maxdepth 5)
+          echo "path=$artifact_path" >> $GITHUB_OUTPUT
 
-      - name: Verify Tauri versions (2.9.x)
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAURI_CRATE_VER=$(grep -Rhs --include='Cargo.toml' -E '(^\\s*tauri\\s*=\\s*\"|version\\s*=\\s*\")' node_modules/pake-cli | sed -n 's/.*\"\([0-9]\\+\.[0-9]\\+\.[0-9]\\+\)\".*/\1/p' | head -n1 || true)
-          NPM_API_VER=$(grep -Rhs --include='package.json' '\"@tauri-apps\\/api\"' node_modules/pake-cli | sed -n 's/.*\"@tauri-apps\\/api\"\\s*:\\s*\"\([0-9][^\" ]*\)\".*/\1/p' | head -n1 || true)
-          echo "Detected tauri crate: ${TAURI_CRATE_VER:-unknown}"
-          echo "Detected @tauri-apps/api: ${NPM_API_VER:-unknown}"
-          if [ -n "$TAURI_CRATE_VER" ] && [ -n "$NPM_API_VER" ]; then
-            if [ "${TAURI_CRATE_VER%.*}" != "2.9" ] || [ "${NPM_API_VER%.*}" != "2.9" ]; then
-              echo "Expected Tauri 2.9.x; got crate $TAURI_CRATE_VER, npm $NPM_API_VER"
-              exit 1
-            fi
-          fi
-
-      - name: Initialize variables
-        shell: bash
+      - name: Upload to GitHub Release (tag push)
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/upload-release-asset@v1
         env:
-          INPUT_URL: ${{ inputs.url }}
-          INPUT_NAME: ${{ inputs.name }}
-          INPUT_ICON: ${{ inputs.icon }}
-          INPUT_WIDTH: ${{ inputs.width }}
-          INPUT_HEIGHT: ${{ inputs.height }}
-        run: |
-          set -euo pipefail
-          echo "URL=${INPUT_URL:-https://chat.maisonrmi.com}" >> "$GITHUB_ENV"
-          echo "NAME=${INPUT_NAME:-MaisonGPT}" >> "$GITHUB_ENV"
-          echo "ICON=${INPUT_ICON:-assets/icons/logo-1024-white.png}" >> "$GITHUB_ENV"
-          echo "WIDTH=${INPUT_WIDTH:-1200}" >> "$GITHUB_ENV"
-          echo "HEIGHT=${INPUT_HEIGHT:-780}" >> "$GITHUB_ENV"
-
-      - name: Build app with pake-cli
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx pake "$URL" --name "$NAME" --icon "$ICON" --width "$WIDTH" --height "$HEIGHT"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: ${{ env.NAME }}-${{ matrix.os }}
-          path: node_modules/pake-cli/output/*
-          retention-days: 7
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ${{ steps.find_artifact.outputs.path }}
+          # Name the asset based on app name and OS (e.g., MaisonGPT.dmg or MaisonGPT_x64.msi)
+          asset_name: ${{ github.event.inputs.name || 'MaisonGPT' }}${{ matrix.os == 'windows-latest' && '_x64.msi' || '.dmg' }}
+          asset_content_type: ${{ matrix.os == 'windows-latest' && 'application/octet-stream' || 'application/x-apple-diskimage' }}
+          # ^ use 'application/x-apple-diskimage' for .dmg and 'application/octet-stream' for .msi
+
+      - name: Upload artifact (manual run)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: "MaisonGPT-Desktop-${{ matrix.os }}"   # e.g., MaisonGPT-Desktop-macos-latest
+          path: ${{ steps.find_artifact.outputs.path }}

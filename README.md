@@ -8,20 +8,29 @@ This repository is intentionally minimal. It contains only assets and a single G
 
 ## Build via GitHub Actions
 
-The workflow is triggered manually via `workflow_dispatch` and accepts inputs:
-- `url` — Website to package (default: `https://chat.maisonrmi.com`).
-- `name` — Application name (default: `MaisonGPT`).
-- `icon` — Path or URL to icon (default: `assets/icons/logo-1024-white.png`).
-- `width` — Window width (default: `1200`).
-- `height` — Window height (default: `780`).
+The workflow can be triggered in two ways:
 
-### Steps to run
-1. Go to the repo’s `Actions` tab.
-2. Select "Build MaisonGPT (macOS & Windows)".
-3. Click "Run workflow", optionally adjust inputs, and start.
-4. When done, artifacts appear under the workflow run:
-   - macOS DMG under `node_modules/pake-cli/output/*` (uploaded as artifacts).
-   - Windows EXE/MSI under `node_modules/pake-cli/output/*` (uploaded as artifacts).
+### 1. Automatic Release (Tag Push)
+Push a version tag to automatically create a GitHub release with built apps:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+- Creates a GitHub release with the tag name
+- Builds and uploads `.dmg` (macOS) and `.msi` (Windows) files to the release
+- Uses default settings: `https://chat.maisonrmi.com`, name `MaisonGPT`, default icon
+
+### 2. Manual Build (workflow_dispatch)
+Trigger manually via GitHub Actions with custom inputs:
+- `url` — Website to package (default: `https://chat.maisonrmi.com`)
+- `name` — Application name (default: `MaisonGPT`)
+- `icon` — Path to icon PNG file (default: `assets/icons/logo-1024-white.png`)
+
+#### Steps to run manually:
+1. Go to the repo's `Actions` tab
+2. Select "Build MaisonGPT Desktop (macOS & Windows)"
+3. Click "Run workflow", optionally adjust inputs, and start
+4. When done, artifacts appear under the workflow run as downloadable files
 
 ## Local Build (Optional)
 If you want to build locally instead of CI:
@@ -30,23 +39,25 @@ If you want to build locally instead of CI:
 npm install -g pake-cli
 pake "https://chat.maisonrmi.com" \
   --name "MaisonGPT" \
-  --icon assets/icons/logo-1024-white.png \
-  --width 1200 \
-  --height 780
+  --icon assets/icons/logo-1024-white.png
 ```
 
-Outputs will be placed in `node_modules/pake-cli/output/` when using the local npm install; if you use the global install, `pake` will print the output path.
+Outputs will be placed in the `pake-cli` output directory.
 
 ## Icons
-- Default icon: `assets/icons/logo-1024-white.png` (recommended for crisp white background across platforms).
-- You can supply a custom icon path or a remote URL via the workflow input.
+- Default icon: `assets/icons/logo-1024-white.png` (optimized for desktop apps)
+- Alternative: `assets/icons/logo-1024.png` (dark background version)
+- Platform-specific icons: `maison.icns` (macOS), `maison.ico` (Windows)
 
 ## Notes
-- Codesigning/notarization is not configured in this minimal setup. Artifacts are unsigned.
-- `pake-cli` wraps your web app URL into a native package via Tauri under the hood.
-- For advanced options (tray, user agent, custom menus, etc.), extend the workflow or use `pake-cli` flags.
+- **Releases**: Tag pushes create GitHub releases with built binaries automatically
+- **Manual runs**: Use workflow_dispatch for testing or custom builds
+- **Codesigning**: Not configured in this minimal setup. Artifacts are unsigned
+- **Technology**: `pake-cli` wraps web apps into native packages via Tauri
+- **Compatibility**: Supports both macOS and Windows builds in parallel
 
 ## Troubleshooting
-- If the icon doesn’t apply, ensure the path exists or use a direct URL.
-- If artifacts are empty, check the workflow logs for `pake-cli` output and errors.
-- Some antivirus tools on Windows may flag unsigned binaries; distribute with caution or add signing later.
+- If the icon doesn't apply, ensure the PNG file exists at the specified path
+- If builds fail, check the workflow logs for `pake-cli` output and errors
+- Windows antivirus may flag unsigned binaries; consider code signing for distribution
+- For release builds, ensure you have proper repository permissions for creating releases
