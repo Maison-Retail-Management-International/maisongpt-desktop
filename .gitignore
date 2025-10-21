@@ -1,0 +1,31 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+output/
+dist/
+*.dmg
+*.exe
+*.msi
+*.zip
+
+# Logs
+logs/
+*.log
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Rust/Tauri (if used locally)
+target/
+src-tauri/target/
+
+# Misc
+coverage/
+.env*

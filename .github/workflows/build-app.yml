@@ -1,0 +1,76 @@
+name: Build MaisonGPT Desktop (macOS & Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Target URL to package"
+        required: true
+        default: "https://chat.maisonrmi.com"
+      name:
+        description: "Application name"
+        required: true
+        default: "MaisonGPT"
+      icon:
+        description: "Custom app icon (URL or repo path)"
+        required: false
+        default: "assets/icons/logo-1024-white.png"
+      width:
+        description: "Window width"
+        required: false
+        default: "1200"
+      height:
+        description: "Window height"
+        required: false
+        default: "780"
+
+jobs:
+  build:
+    name: ${{ inputs.name }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            rust: stable
+          - os: windows-latest
+            rust: stable-x86_64-msvc
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          check-latest: true
+
+      - name: Install pake-cli locally
+        run: npm install pake-cli@latest
+
+      - name: Build app with pake-cli
+        shell: bash
+        env:
+          URL: ${{ inputs.url }}
+          NAME: ${{ inputs.name }}
+          ICON: ${{ inputs.icon }}
+          WIDTH: ${{ inputs.width }}
+          HEIGHT: ${{ inputs.height }}
+        run: |
+          set -euo pipefail
+          # Use npx to invoke local CLI (ensures correct PATH)
+          npx pake "$URL" --name "$NAME" --icon "$ICON" --width "$WIDTH" --height "$HEIGHT"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.name }}-${{ matrix.os }}
+          path: node_modules/pake-cli/output/*
+          retention-days: 7
