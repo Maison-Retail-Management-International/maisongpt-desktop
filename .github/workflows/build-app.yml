@@ -67,12 +67,11 @@ jobs:
         # As per docs: npm install -g pake-cli (pnpm also supported)
         run: npm install -g pake-cli
 
-      - name: Install Tauri CLI (force latest)
-        shell: bash
-        run: |
-          # Ensure we use the latest Tauri CLI to align with APIs.
-          cargo install tauri-cli --locked --force
-          tauri --version || true
+      - name: Install Tauri CLI (Node)
+        run: npm install -g @tauri-apps/cli
+
+      - name: Show tauri version
+        run: tauri --version || true
 
       - name: Show environment
         shell: bash
