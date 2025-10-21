@@ -82,6 +82,36 @@ jobs:
           pake --help | head -n 20 || true
           tauri --help | head -n 20 || true
 
+      - name: Pin @tauri-apps/api to v2.8.5 in Pake workspace (macOS)
+        if: ${{ matrix.os == 'macos-latest' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_ROOT="$(npm root -g)"
+          cd "$NODE_ROOT/pake-cli"
+          npm i @tauri-apps/api@2.8.5 --save-dev --no-audit --no-fund
+
+      - name: Add mismatch bypass flag to Pake build script (macOS)
+        if: ${{ matrix.os == 'macos-latest' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_ROOT="$(npm root -g)"
+          PKG="$NODE_ROOT/pake-cli/package.json"
+          PKG="$PKG" node -e '
+          const fs=require("fs");
+          const pkg=process.env.PKG;
+          const json=JSON.parse(fs.readFileSync(pkg,"utf8"));
+          if (!json.scripts) json.scripts = {};
+          const cur = json.scripts.build || "tauri build";
+          if (!cur.includes("--no-error-on-version-mismatch")) {
+            json.scripts.build = cur + " --no-error-on-version-mismatch";
+            fs.writeFileSync(pkg, JSON.stringify(json, null, 2));
+            console.log("Patched build script:", json.scripts.build);
+          } else {
+            console.log("Build script already contains mismatch bypass.");
+          }'
+
       - name: Build with Pake
         shell: bash
         env:
