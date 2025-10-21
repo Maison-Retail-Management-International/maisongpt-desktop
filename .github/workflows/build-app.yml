@@ -83,8 +83,7 @@ jobs:
           pake --help | head -n 20 || true
           tauri --help | head -n 20 || true
 
-      - name: Build with Pake (macOS)
-        if: matrix.os == 'macos-latest'
+      - name: Build with Pake
         shell: bash
         env:
           TAURI_CLI_NO_ERROR_ON_VERSION_MISMATCH: "true"
@@ -93,32 +92,18 @@ jobs:
           TAURI_SKIP_VERSION_CHECK: "true"
           NO_ERROR_ON_VERSION_MISMATCH: "true"
         run: |
-          # Ensure titlebar is visible by explicitly setting --title
-          # Pass icon if provided; Pake will auto-fetch favicon if not valid.
+          # Build only the target format for the current OS.
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            TARGETS="dmg"
+          else
+            TARGETS="msi"
+          fi
           pake "${INPUT_URL}" \
             --name "${INPUT_NAME}" \
             --title "${INPUT_NAME}" \
             --icon "${INPUT_ICON}" \
-            --app-version "${{ steps.ver.outputs.app_version }}"
-          # On macOS Pake emits a .dmg in the CWD by default.
-
-      - name: Build with Pake (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        env:
-          TAURI_CLI_NO_ERROR_ON_VERSION_MISMATCH: "true"
-          TAURI_IGNORE_VERSION_MISMATCH: "true"
-          TAURI_NO_ERROR_ON_VERSION_MISMATCH: "true"
-          TAURI_SKIP_VERSION_CHECK: "true"
-          NO_ERROR_ON_VERSION_MISMATCH: "true"
-        run: |
-          # Windows runner supports bash; we use same CLI.
-          pake "${INPUT_URL}" \
-            --name "${INPUT_NAME}" \
-            --title "${INPUT_NAME}" \
-            --icon "${INPUT_ICON}" \
-            --app-version "${{ steps.ver.outputs.app_version }}"
-          # On Windows Pake emits MSI under target bundle tree; we will glob for it.
+            --app-version "${{ steps.ver.outputs.app_version }}" \
+            --targets "${TARGETS}"
 
       - name: Locate output artifact
         id: out
