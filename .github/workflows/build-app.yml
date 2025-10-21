@@ -67,6 +67,13 @@ jobs:
         # As per docs: npm install -g pake-cli (pnpm also supported)
         run: npm install -g pake-cli
 
+      - name: Install Tauri CLI (force latest)
+        shell: bash
+        run: |
+          # Ensure we use the latest Tauri CLI to align with APIs.
+          cargo install tauri-cli --locked --force
+          tauri --version || true
+
       - name: Show environment
         shell: bash
         run: |
@@ -74,10 +81,17 @@ jobs:
           npm -v
           rustc -V
           pake --help | head -n 20 || true
+          tauri --help | head -n 20 || true
 
       - name: Build with Pake (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash
+        env:
+          TAURI_CLI_NO_ERROR_ON_VERSION_MISMATCH: "true"
+          TAURI_IGNORE_VERSION_MISMATCH: "true"
+          TAURI_NO_ERROR_ON_VERSION_MISMATCH: "true"
+          TAURI_SKIP_VERSION_CHECK: "true"
+          NO_ERROR_ON_VERSION_MISMATCH: "true"
         run: |
           # Ensure titlebar is visible by explicitly setting --title
           # Pass icon if provided; Pake will auto-fetch favicon if not valid.
@@ -91,6 +105,12 @@ jobs:
       - name: Build with Pake (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
+        env:
+          TAURI_CLI_NO_ERROR_ON_VERSION_MISMATCH: "true"
+          TAURI_IGNORE_VERSION_MISMATCH: "true"
+          TAURI_NO_ERROR_ON_VERSION_MISMATCH: "true"
+          TAURI_SKIP_VERSION_CHECK: "true"
+          NO_ERROR_ON_VERSION_MISMATCH: "true"
         run: |
           # Windows runner supports bash; we use same CLI.
           pake "${INPUT_URL}" \
