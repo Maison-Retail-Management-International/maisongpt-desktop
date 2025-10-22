@@ -11,6 +11,7 @@ dist/
 *.exe
 *.msi
 *.zip
+MaisonGPT.app/
 
 # Logs
 logs/
